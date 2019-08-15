@@ -47,12 +47,20 @@ parser.add_argument('--counts_col',
                          "default [7], which is featureCounts default, all "
                          "columns before 7th are metadata cols"
                     )
+parser.add_argument('--strict',
+                    action='store_true',
+                    dest='strict',
+                    help="Be pedantic about sanity checks. "
+                         "Counts file must have same numbe of gene identifiers "
+                         "as found in the --gene_ids file."
+                    )
 
 args = parser.parse_args()
 counts_file = args.counts_file
 gene_ids = args.gene_ids
 samples_sheet = args.samples_sheet
 usr_biotype = args.biotype
+strict = args.strict
 cnts_col = args.counts_col
 # this is to covert to zero based index
 cnts_col = cnts_col - 1
@@ -84,6 +92,7 @@ def get_name(raw_name, sample_names):
         "Didn't found sample name for this %s column in counts file, "
         "check your %s" % (raw_name, samples_sheet))
 
+_warning_gene_ids_mismatch = ''
 with open(counts_file) as handler:
     s_names = None
     header = True
@@ -103,9 +112,16 @@ with open(counts_file) as handler:
         gene_id = line[0]
         row_cnts = "\t".join(line[cnts_col:])
         if gene_id not in ensembl_dict:
-            raise Exception(
-                "This shouldn't happened, %s and %s don't have same number "
-                "of genes" % (gene_ids, "counts_file"))
+            if strict:
+                raise Exception(
+                    "This shouldn't happened, %s and %s don't have same number "
+                    "of genes (ID %s)" % (gene_ids, "counts_file", gene_id))
+            else:
+                _warning_gene_ids_mismatch = (
+                    "%s and %s don't have same number "
+                    "of genes (eg, ID %s)" % (gene_ids, "counts_file", gene_id))
+                print('ID not found %s' % gene_id)
+                continue
 
         chrom, gene_name, biotype = ensembl_dict[gene_id]
 
@@ -122,3 +138,10 @@ with open(counts_file) as handler:
             print('\t'.join((gene_id, chrom, gene_name, biotype, row_cnts)))
         elif usr_biotype == biotype:
             print('\t'.join((gene_id, chrom, gene_name, biotype, row_cnts)))
+
+if _warning_gene_ids_mismatch:
+    import logging
+    FORMAT = '%(asctime)-15s\t%(levelname)s:\t%(message)s'
+    logging.basicConfig(format=FORMAT)
+    logger = logging.getLogger(__name__)
+    logger.warning(_warning_gene_ids_mismatch)
