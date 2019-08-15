@@ -9,6 +9,11 @@ string{} getMarkedBams(string{} cmdExe, string markedDupsBams, string{} bamsMap,
     if(!cmdExe.hasKey("picardExe")) error "Can't get picard executable, check your config file $configFile"
     string picardExe = cmdExe{"picardExe"}
 
+    string{} resource = getResource(cmdExe, "picard", "MarkDups")
+    int picardMem = resource{"toolsMem"}.parseInt()
+    real scaleFact = 0.85
+    string picardJvmMem = round(scaleFact * picardMem/1000000)+"m"
+
     for(string bamKey : bamsMap.keys()) {
 
         string bamFile = bamsMap{bamKey}
@@ -16,13 +21,15 @@ string{} getMarkedBams(string{} cmdExe, string markedDupsBams, string{} bamsMap,
         string mdupsName = sortedName.swapExt(".bam", "_mdups.bam")
         string metricsName = sortedName.swapExt(".bam", "_mdups.metrics")
 
-        dep(prePro, [mdupsName, metricsName] <- [bamFile, fastaDictFile], cpus := 4, taskName := "picard sorting "+bamFile) {
-            sys $picardExe SortSam TMP_DIR=tmp/ \
+        dep(prePro, [mdupsName, metricsName] <- [bamFile, fastaDictFile], cpus := 4, mem := picardMem, taskName := "picard sorting "+bamFile) {
+            sys $picardExe -Xmx $picardJvmMem \
+                SortSam TMP_DIR=tmp/ \
                                    VALIDATION_STRINGENCY=LENIENT \
                                    INPUT=$bamFile \
                                    OUTPUT=$sortedName \
                                    SORT_ORDER=coordinate
-            sys $picardExe MarkDuplicates TMP_DIR=tmp/ \
+            sys $picardExe -Xmx $picardJvmMem \
+                MarkDuplicates TMP_DIR=tmp/ \
                                           VALIDATION_STRINGENCY=LENIENT \
                                           CREATE_INDEX=true \
                                           INPUT=$sortedName \
