@@ -109,10 +109,14 @@ string makeDictFile(string{} cmdExe, string fastaRef) {
     int createDictMem = resource{"toolsMem"}.parseInt()
     int createDictCpu = resource{"toolsCpu"}.parseInt()
 
+    real scalFact = 0.85
+    string createDictJvmMem = round(scalFact * createDictMem/1000000)+"m"
+
     string fastaDictFile = fastaRef.removeExt()+".dict"
     task(mdups, fastaDictFile <- fastaRef, cpus := createDictCpu, mem := createDictMem, taskName := "Making dictionary File") {
-        sys $picardExe CreateSequenceDictionary REFERENCE=$fastaRef \
-                                                OUTPUT=$fastaDictFile
+        sys $picardExe -Xmx $createDictJvmMem \
+            CreateSequenceDictionary REFERENCE=$fastaRef \
+                                     OUTPUT=$fastaDictFile
     }
     return fastaDictFile
 }
