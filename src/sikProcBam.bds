@@ -64,6 +64,9 @@ string{} getDeDupedBams(string{} cmdExe, string{} bamsMap) {
     int picardMem = resource{"toolsMem"}.parseInt()
     int picardCpu = resource{"toolsCpu"}.parseInt()
 
+    real scaleFact = 0.85
+    string picardJvmMem = round(scaleFact * picardMem/1000000)+"m"
+
     string[] markedBams
     string{} markedBamsMap
 
@@ -77,7 +80,8 @@ string{} getDeDupedBams(string{} cmdExe, string{} bamsMap) {
         string mdupsLog = mdupsName.replace(hackMdups, "."+hackMdups).removeExt()+".siklog"
 
         dep(mdups && !umi, [mdupsName, metricsName] <- bamFile, cpus := picardCpu, mem := picardMem, taskName := "markiing duplicates with picard MarkDuplicates "+bamFile) {
-            sys $picardExe MarkDuplicates TMP_DIR=tmp/ \
+            sys $picardExe -Xmx $picardJvmMem \
+                           MarkDuplicates TMP_DIR=tmp/ \
                                           VALIDATION_STRINGENCY=LENIENT \
                                           CREATE_INDEX=true \
                                           INPUT=$bamFile \
@@ -101,6 +105,9 @@ string{} getDeDupedBamsUmi(string{} cmdExe, string{} bamsMap) {
     string jeExe = resource{"toolsExe"}
     int jeMem = resource{"toolsMem"}.parseInt()
     int jeCpu = resource{"toolsCpu"}.parseInt()
+
+    real scaleFact = 0.85
+    string picardJvmMem = round(scaleFact * jeMem/1000000)+"m"
 
     string{} resource2 = getResource(cmdExe, "picard", "MarkDups")
     string picardExe = resource2{"toolsExe"}
@@ -126,7 +133,7 @@ string{} getDeDupedBamsUmi(string{} cmdExe, string{} bamsMap) {
                        REMOVE_DUPLICATES=true \
                        ASSUME_SORTED=true > $mdupsLog 2>&1
 
-            sys $picardExe BuildBamIndex INPUT=$mdupsName
+            sys $picardExe -Xmx $picardJvmMem BuildBamIndex INPUT=$mdupsName
 
             sys rm $bamFile $bamFileIdx
         }
