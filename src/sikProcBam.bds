@@ -80,7 +80,7 @@ string{} getDeDupedBams(string{} cmdExe, string{} bamsMap) {
         string mdupsLog = mdupsName.replace(hackMdups, "."+hackMdups).removeExt()+".siklog"
 
         dep(mdups && !umi, [mdupsName, metricsName] <- bamFile, cpus := picardCpu, mem := picardMem, taskName := "markiing duplicates with picard MarkDuplicates "+bamFile) {
-            sys $picardExe -Xmx $picardJvmMem \
+            sys $picardExe -Xmx$picardJvmMem \
                            MarkDuplicates TMP_DIR=tmp/ \
                                           VALIDATION_STRINGENCY=LENIENT \
                                           CREATE_INDEX=true \
@@ -133,7 +133,7 @@ string{} getDeDupedBamsUmi(string{} cmdExe, string{} bamsMap) {
                        REMOVE_DUPLICATES=true \
                        ASSUME_SORTED=true > $mdupsLog 2>&1
 
-            sys $picardExe -Xmx $picardJvmMem BuildBamIndex INPUT=$mdupsName
+            sys $picardExe -Xmx$picardJvmMem BuildBamIndex INPUT=$mdupsName
 
             sys rm $bamFile $bamFileIdx
         }

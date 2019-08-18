@@ -22,13 +22,13 @@ string{} getMarkedBams(string{} cmdExe, string markedDupsBams, string{} bamsMap,
         string metricsName = sortedName.swapExt(".bam", "_mdups.metrics")
 
         dep(prePro, [mdupsName, metricsName] <- [bamFile, fastaDictFile], cpus := 4, mem := picardMem, taskName := "picard sorting "+bamFile) {
-            sys $picardExe -Xmx $picardJvmMem \
+            sys $picardExe -Xmx$picardJvmMem \
                 SortSam TMP_DIR=tmp/ \
                                    VALIDATION_STRINGENCY=LENIENT \
                                    INPUT=$bamFile \
                                    OUTPUT=$sortedName \
                                    SORT_ORDER=coordinate
-            sys $picardExe -Xmx $picardJvmMem \
+            sys $picardExe -Xmx$picardJvmMem \
                 MarkDuplicates TMP_DIR=tmp/ \
                                           VALIDATION_STRINGENCY=LENIENT \
                                           CREATE_INDEX=true \
