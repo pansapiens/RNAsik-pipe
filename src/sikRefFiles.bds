@@ -114,7 +114,7 @@ string makeDictFile(string{} cmdExe, string fastaRef) {
 
     string fastaDictFile = fastaRef.removeExt()+".dict"
     task(mdups, fastaDictFile <- fastaRef, cpus := createDictCpu, mem := createDictMem, taskName := "Making dictionary File") {
-        sys $picardExe -Xmx $createDictJvmMem \
+        sys $picardExe -Xmx$createDictJvmMem \
             CreateSequenceDictionary REFERENCE=$fastaRef \
                                      OUTPUT=$fastaDictFile
     }
