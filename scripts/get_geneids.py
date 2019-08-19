@@ -171,7 +171,7 @@ def get_gff(handler, feat_types=None, biotype_id_mapping=None):
         tweak = value + typesRegex
         biotypes[key] = tweak
 
-    for i in handler:
+    for line_index, i in enumerate(handler):
         line = i.strip()
 
         if line.startswith('#'):
@@ -189,19 +189,19 @@ def get_gff(handler, feat_types=None, biotype_id_mapping=None):
                 gene_biotype = 'NA'
                 chrom = feature[0]
 
-                if chk_gene_name:
-                    gene_name = chk_gene_name.group(1)
-                
                 if chrom not in genes_attr:
                     genes_attr[chrom] = {}
 
                 if chk_gene_id:
                     gene_id = chk_gene_id.group(1)
-
                     if gene_id not in genes_attr[chrom]:
                         genes_attr[chrom][gene_id] = {}
-
-                    genes_attr[chrom][gene_id]["gene_name"] = gene_name
+                else:
+                    sys.stderr.write("No gene ID attribute found. Skipping line %s\n" % str(line_index + 1))
+                    continue
+                
+                if chk_gene_name:
+                    gene_name = chk_gene_name.group(1)
                 
                 if biotype_id_mapping:
                     gene_biotype = biotype_id_mapping.get(gene_id, {}).get('biotype', 'NA')
@@ -211,7 +211,9 @@ def get_gff(handler, feat_types=None, biotype_id_mapping=None):
                         if checkBiotype:
                             gene_biotype = checkBiotype.group(1)
                 
-                genes_attr[chrom][gene_id]["biotype"] = gene_biotype
+                if chk_gene_id:
+                    genes_attr[chrom][gene_id]["gene_name"] = gene_name
+                    genes_attr[chrom][gene_id]["biotype"] = gene_biotype
 
                 # if gene_id:
                 #    if gene_id.group(1) not in genes_attr:
@@ -220,7 +222,7 @@ def get_gff(handler, feat_types=None, biotype_id_mapping=None):
                 #        genes_attr[gene_id.group(1)].append(gene_biotype)
                 #        genes_attr[gene_id.group(1)].append(feature[0])
         else:
-            print("WARNING: Length of the line %d, should be 9" % len(feature), file = sys.stderr)
+            sys.stderr.write("WARNING: Length of the line %d, should be 9\n" % len(feature), file = sys.stderr)
 
     return genes_attr
 
@@ -284,7 +286,10 @@ with open(in_file) as handler:
                 header = False
 
             for gene_id, values in sorted(attr.items()):
-                print('\t'.join((gene_id, chrom, values["gene_name"], values["biotype"])))
+                biotype = values.get('biotype', 'NA') or 'NA'
+                gene_name = values.get('gene_name', 'NA') or 'NA'
+                
+                print('\t'.join([gene_id, chrom, gene_name, biotype]))
 
     else:
         sys.exit(

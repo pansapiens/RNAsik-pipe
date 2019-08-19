@@ -89,7 +89,7 @@ def get_name(raw_name, sample_names):
         if raw_name.startswith(s_name):
             return s_name
     raise Exception(
-        "Didn't found sample name for this %s column in counts file, "
+        "Didn't find sample name for this %s column in counts file, "
         "check your %s" % (raw_name, samples_sheet))
 
 _warning_gene_ids_mismatch = ''
@@ -120,7 +120,7 @@ with open(counts_file) as handler:
                 _warning_gene_ids_mismatch = (
                     "%s and %s don't have same number "
                     "of genes (eg, ID %s)" % (gene_ids, "counts_file", gene_id))
-                print('ID not found %s' % gene_id)
+                sys.stderr.write('ID not found %s\n' % gene_id)
                 continue
 
         chrom, gene_name, biotype = ensembl_dict[gene_id]
