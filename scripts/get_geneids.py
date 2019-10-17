@@ -33,11 +33,11 @@ parser.add_argument(
     dest='feat_types',
     metavar='FEATURE_NAME',
     nargs='+',
-    default=['gene', 'exon', 'transcript', 'CDS'],
+    default=['gene', 'exon', 'transcript', 'CDS', 'mRNA'],
     help="specify feature types (space seperated, eg -f gene exon CDS transcript). This is third column in the input annotation file. Default [gene exon transcript CDS]"
 )
 
-def get_gtf(handler, feat_types=None):
+def get_gtf(handler, feat_types=None, name_attr='gene_name'):
 
     if feat_types is None:
         feat_types = ['gene', 'exon', 'transcript', 'CDS']
@@ -63,7 +63,7 @@ def get_gtf(handler, feat_types=None):
 
                 chk_gene_id = re.search('gene_id\s.([A-z0-9_ \. \- \(\)]+)',
                                         ninthField)
-                chk_gene_name = re.search('gene_name\s.([A-z0-9_ \. \: \- \(\)]+)',
+                chk_gene_name = re.search('%s\s.([A-z0-9_ \. \: \- \(\)]+)' % name_attr,
                                           ninthField)
 
                 gene_name = 'NA'
@@ -103,10 +103,63 @@ def get_gtf(handler, feat_types=None):
     return genes_attr
 
 
-def get_gff(handler, feat_types=None):
+def create_gff_tree(handler):
+    """
+    Reads a GFF file handle and returns a dictionary like:
+    
+      {id, {biotype, parent}}
+    
+    The biotype or parent may be None.
+
+    'id' is the ID attribute from the GFF, 'biotype' is the gene_biotype attribute,
+    or in the case where there is no gene_biotype, the attribute is taken from the Parent (or Parent's Parent),
+    walking up the hierarchy of nested features (only two branches are traversed).
+
+    For an NCBI RefSeq type GFF, this effectively propagates biotype from gene -> mRNA -> CDS,
+    (even though the CDS does not have a biotype attribute itself).
+    """
+    biotype_parent_tree = {}
+
+    for i in handler:
+        line = i.strip()
+
+        if line.startswith('#'):
+            continue
+
+        fields = line.split('\t')
+        contig = fields[0]
+        feature_type = fields[2]
+        attributes = [tuple(a.split('=')) for a in fields[8].split(';')]
+        attributes = dict(attributes)
+
+        # print(feature_type, attributes)
+
+        ID = attributes.get('ID', None)
+        biotype = attributes.get('gene_biotype', None)
+        parent = attributes.get('Parent', None)
+        if ID and ID not in biotype_parent_tree:
+            biotype_parent_tree[ID] = {'parent': parent, 'biotype': biotype}     
+
+    # HACK: This would be smarter as a recursive function (with some depth limit).
+    #       Instead we just run this twice to propagate biotype from gene -> mRNA -> CDS
+    #       for NCBI RefSeq type GFFs.
+    for ID, link in list(biotype_parent_tree.items()):
+        parent = link['parent']
+        if not link['biotype'] and parent:
+            biotype_parent_tree[ID]['biotype'] = biotype_parent_tree[parent]['biotype']
+
+    for ID, link in list(biotype_parent_tree.items()):
+        parent = link['parent']
+        if not link['biotype'] and parent:
+            biotype_parent_tree[ID]['biotype'] = biotype_parent_tree[parent]['biotype']
+
+    return biotype_parent_tree
+
+
+def get_gff(handler, feat_types=None, biotype_id_mapping=None):
 
     if feat_types is None:
-        feat_types = ['gene', 'exon', 'transcript', 'CDS']
+        feat_types = ['gene', 'exon', 'transcript', 'CDS', 'mRNA']
 
     genes_attr = {}
 
@@ -116,7 +169,7 @@ def get_gff(handler, feat_types=None):
         tweak = value + typesRegex
         biotypes[key] = tweak
 
-    for i in handler:
+    for line_index, i in enumerate(handler):
         line = i.strip()
 
         if line.startswith('#'):
@@ -134,22 +187,29 @@ def get_gff(handler, feat_types=None):
                 gene_biotype = 'NA'
                 chrom = feature[0]
 
-                if chk_gene_name:
-                    gene_name = chk_gene_name.group(1)
-                for value in list(biotypes.values()):
-                    checkBiotype = re.search(value, ninthField)
-                    if checkBiotype:
-                        gene_biotype = checkBiotype.group(1)
-
                 if chrom not in genes_attr:
                     genes_attr[chrom] = {}
 
                 if chk_gene_id:
                     gene_id = chk_gene_id.group(1)
-
                     if gene_id not in genes_attr[chrom]:
                         genes_attr[chrom][gene_id] = {}
-
+                else:
+                    sys.stderr.write("No gene ID attribute found. Skipping line %s\n" % str(line_index + 1))
+                    continue
+                
+                if chk_gene_name:
+                    gene_name = chk_gene_name.group(1)
+                
+                if biotype_id_mapping:
+                    gene_biotype = biotype_id_mapping.get(gene_id, {}).get('biotype', 'NA')
+                else:
+                    for value in list(biotypes.values()):
+                        checkBiotype = re.search(value, ninthField)
+                        if checkBiotype:
+                            gene_biotype = checkBiotype.group(1)
+                
+                if chk_gene_id:
                     genes_attr[chrom][gene_id]["gene_name"] = gene_name
                     genes_attr[chrom][gene_id]["biotype"] = gene_biotype
 
@@ -160,7 +220,7 @@ def get_gff(handler, feat_types=None):
                 #        genes_attr[gene_id.group(1)].append(gene_biotype)
                 #        genes_attr[gene_id.group(1)].append(feature[0])
         else:
-            print("WARNING: Length of the line %d, should be 9" % len(feature), file = sys.stderr)
+            sys.stderr.write("WARNING: Length of the line %d, should be 9\n" % len(feature), file = sys.stderr)
 
     return genes_attr
 
@@ -197,6 +257,14 @@ biotypes = {
     "tt": 'transcript_type'
 }
 
+biotype_id_mapping = None
+if file_type == "gff":
+    with open(in_file) as fh:
+        biotype_id_mapping = create_gff_tree(fh)
+
+    #for k, v in biotype_id_mapping.items():
+    #    print(k, v)
+
 with open(in_file) as handler:
     genes_attr = None
 
@@ -205,7 +273,7 @@ with open(in_file) as handler:
     if file_type == "gtf":
         genes_attr = get_gtf(handler, feat_types)
     if file_type == "gff":
-        genes_attr = get_gff(handler, feat_types)
+        genes_attr = get_gff(handler, feat_types, biotype_id_mapping=biotype_id_mapping)
 
     if genes_attr is not None:
 
@@ -216,7 +284,10 @@ with open(in_file) as handler:
                 header = False
 
             for gene_id, values in sorted(attr.items()):
-                print('\t'.join((gene_id, chrom, values["gene_name"], values["biotype"])))
+                biotype = values.get('biotype', 'NA') or 'NA'
+                gene_name = values.get('gene_name', 'NA') or 'NA'
+                
+                print('\t'.join([gene_id, chrom, gene_name, biotype]))
 
     else:
         sys.exit(
