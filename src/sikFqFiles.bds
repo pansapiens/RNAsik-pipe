@@ -140,11 +140,11 @@ string[] alignerReads(string fqString, string pairIds) {
     // if no command foung in the pairIds string assume
     // single-end data with _R1 or similar suffix
     // and therefore return fqString straight away
-    int chk = pairIds.indexOf(",")
-    if(pairIds.indexOf(",") == -1) {
+    bool unpaired = (pairIds.indexOf(",") == -1)
+    if(unpaired) {
         return [fqClean]
     }
-    else if(pairIds.indexOf(",") != -1) {
+    else {
 
         string[] pairIdsList = pairIds.split(",")
 
@@ -155,11 +155,11 @@ string[] alignerReads(string fqString, string pairIds) {
         for(string fq : fqClean.split(",")) {
             string fqBase = fq.baseName()
 
-            if(fqBase.lastIndexOf(pairIdsList[0]) != -1) {
+            if(fqBase.lastIndexOf(pairIdsList[0]+extn) != -1) {
                 readOne.add(fq)
             }
             else {
-                if(fqBase.lastIndexOf(pairIdsList[1]) != -1 ) {
+                if(fqBase.lastIndexOf(pairIdsList[1]+extn) != -1 ) {
                     readTwo.add(fq)
                 }
                 else {
@@ -178,9 +178,6 @@ string[] alignerReads(string fqString, string pairIds) {
             string readTwoStr = readTwo.join(",")
             return [readOneStr, readTwoStr]
         }
-    }
-    else {
-        error "This can't happend"
     }
 }
 // retuns two items list [old_prefix, new_prefix]
@@ -239,7 +236,10 @@ string makeSamplesSheet(string[] fqReads, string[] fqRgxs, bool paired, string p
 
         int chkPairIds = pairIds.indexOf(",")
         if(chkPairIds != -1) {
-            string chkR2 = fq.replace(pairIdsList[0], pairIdsList[1])
+            // Pair identifier (eg _R1 or _R2 must be at the end of the filename, right before the extension 
+            // (eg sampleA_R2.fq.gz). For filenames like: sampleA_R2_001.fq.gz, the -extn should be set to _001.fq.gz,
+            // or set -pairIds R1_001,R2_001 and -extn .fq.gz
+            string chkR2 = fq.replace(pairIdsList[0]+extn, pairIdsList[1]+extn)
             if(!paired && chkR2.exists()) {
                 error "-paired set to $paired, but found $pairIdsList[1] read. Is it paired-end data? Also check your -pairIds $pairIds"
             }
